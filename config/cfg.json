@@ -1,0 +1,30 @@
+{
+  "paths": {
+    "project_path": "project.path",
+    "info_path": "info",
+    "key_path": "keys",
+    "data_path":"data"
+  },
+  "files":{
+    "info_file":["info_path","info.json"],
+    "data_file":["data_path","bike_data.csv"],
+    "feature_file":["data_path","full_bike_data.csv"]
+  },
+  "keys":{
+    "forecastio":"forecastio.key"
+  },
+  "date_format":"%Y-%m-%d %H:%M",
+  "last_pulled":"2016-09-24 16:28",
+  "socrata_info": {
+    "url": "data.seattle.gov",
+    "dataset_identifier": "65db-xm6k",
+    "database_date_format":"%Y-%m-%dT%H:%M:%S"
+  },
+  "forecastio_info": {
+    "weather_location": {
+      "city":"Seattle",
+      "lat":47.649662,
+      "lng":-122.350273
+    }
+  }
+}
