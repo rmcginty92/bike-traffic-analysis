@@ -9,8 +9,9 @@ import utils.alg as alg
 # Preprocessing & Filtering #
 # ------------------------- #
 
-def remove_features(features,col_list):
-    return features.drop(col_list,axis=1)
+def remove_features(features,col_list=None):
+    if col_list is None: col_list = ['date','icon','summary','time','fremont_bridge_nb','fremont_bridge_sb','y']
+    return features.drop(features.columns.intersection(col_list),axis=1)
 
 
 def clean_features(feature_set, labels=None, remove_sample_rows=True, remove_feature_cols=True,
@@ -80,7 +81,7 @@ def normalize_features(xdf, norm_mask=None, norm_type='max', norm_perc=None, sav
 def expand_datetime_features(df, date):
     if isinstance(date,str):
         date = pd.to_datetime(df[date])
-        df['date'] = date
+        df['date'] = date.date()
     df['year'] = date.apply(lambda x: x.year)
     df['month'] = date.apply(lambda x: x.month)
     df['day'] = date.apply(lambda x: x.day)

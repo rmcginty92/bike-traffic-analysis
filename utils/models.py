@@ -1,5 +1,5 @@
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.linear_model import BayesianRidge, Ridge, Lasso, ElasticNet
@@ -22,6 +22,31 @@ def get_regressors(class_weights='balanced',random_state=1223):
         'ExtraTreesRegressor':ExtraTreesRegressor(n_estimators=50,max_depth=6)
     }
 
+
+def lstm_base_model(input_dim,hidden_layers=None,timesteps=3,dropout_perc=0.5):
+    output_dim = 1
+    if hidden_layers is None: hidden_layers = [1.5,0.75,0.25]
+    num_layers = len(hidden_layers)+2
+    dropout_list = [dropout_perc for i in range(num_layers - 1)]
+    if any([layer_shape < 1 or isinstance(layer_shape,float) for layer_shape in hidden_layers]): # layer shapes as percentages.
+        hidden_layers = [int(input_dim*layer_shape) for layer_shape in hidden_layers]
+    apply_dropout = True
+    lstm_model = Sequential()
+    lstm_model.add(LSTM(hidden_layers[0], return_sequences=True, input_shape=(timesteps,input_dim)))
+    # lstm_model.add(Dense(hidden_layers[0], input_shape=(timesteps,input_dim)))
+    if apply_dropout and dropout_perc > 0: lstm_model.add(Dropout(dropout_list[0]))
+    for i,hidden_layer_inp in enumerate(hidden_layers[:-1]):
+        lstm_model.add(LSTM(hidden_layers[i+1], return_sequences=True, input_shape=(timesteps, hidden_layer_inp)))
+        if apply_dropout and dropout_perc > 0: lstm_model.add(Dropout(dropout_list[i+1]))
+    lstm_model.add(LSTM(hidden_layers[-1], return_sequences=False,
+                  input_shape=(timesteps, hidden_layers[-1])))
+    if apply_dropout: lstm_model.add(Dropout(dropout_list[-1]))
+    lstm_model.add(Dense(output_dim))
+    lstm_model.compile(optimizer='rmsprop',loss='mean_squared_error',metrics=['accuracy'])
+    return lstm_model
+
+
+'''
 class LSTMregressor(KerasRegressor):
     def __init__(self,input_dim=10,hidden_layers=[],timesteps=3,dropout_perc=0.5):
         self.input_dim = input_dim
@@ -90,11 +115,7 @@ class LSTMregressor(KerasRegressor):
         elif hidden_layers is None:
             hidden_layers = []
         return hidden_layers
-
+'''
 
 if __name__=="__main__":
-    from sklearn.datasets import load_boston
-    X,y = load_boston(True)
-    lstm = LSTMregressor(input_dim=X.shape[1],hidden_layers=[1.5,0.7],timesteps=1)
-    lstm.fit(X,y)
-    print lstm
+    pass

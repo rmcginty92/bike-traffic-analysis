@@ -1,0 +1,4 @@
+*.pyc
+*.path
+*.key
+.idea
