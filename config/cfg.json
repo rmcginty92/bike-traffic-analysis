@@ -3,7 +3,8 @@
     "project_path": "project.path",
     "info_path": "info",
     "key_path": "keys",
-    "data_path":"data"
+    "data_path":"data",
+    "image_path":"plots"
   },
   "files":{
     "info_file":["info_path","info.json"],

@@ -5,11 +5,12 @@ from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.linear_model import BayesianRidge, Ridge, Lasso, ElasticNet
 from sklearn.svm import SVR
 
-from keras.models import Sequential
 from keras.wrappers.scikit_learn import KerasRegressor
+from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
 from keras.layers import Embedding
 from keras.layers import LSTM
+
 
 def get_regressors(class_weights='balanced',random_state=1223):
     regressors = {
@@ -23,27 +24,169 @@ def get_regressors(class_weights='balanced',random_state=1223):
     }
 
 
-def lstm_base_model(input_dim,hidden_layers=None,timesteps=3,dropout_perc=0.5):
+def lstm_base_model(input_dim,hidden_layers=None,timesteps=1,dropout_perc=0.5,**kwargs):
     output_dim = 1
-    if hidden_layers is None: hidden_layers = [1.5,0.75,0.25]
+    # Setting up parameters
+    if hidden_layers is None:
+        hidden_layers = []
+    elif not isinstance(hidden_layers, (list, np.ndarray)):
+        hidden_layers = [hidden_layers]
+    else:
+        if isinstance(hidden_layers, np.ndarray):
+            layers = hidden_layers.tolist()
+        else:
+            layers = hidden_layers
+    if any([layer_shape < 1 or isinstance(layer_shape, float) for layer_shape in
+            hidden_layers]):  # layer shapes as percentages.
+        hidden_layers = [int(input_dim * layer_shape) for layer_shape in hidden_layers]
+    apply_dropout = dropout_perc > 0
+
+
+    activation = kwargs.setdefault('activation','relu')
+    init = kwargs.setdefault('init','normal')
+    optimizer = kwargs.setdefault('optimizer','rmsprop')
+    loss = kwargs.setdefault('loss','mean_squared_error')
+
+    lstm_model = Sequential()
+    input_shape = (timesteps, input_dim)
+
+    for i,layer_outp in enumerate(hidden_layers):
+        if i == 0:
+            lstm_model.add(LSTM(layer_outp, return_sequences=True, input_shape=input_shape,
+                                init=init, activation=activation))
+            input_shape = (timesteps,layer_outp)
+        elif i < len(hidden_layers) - 1:
+            if apply_dropout and dropout_perc > 0: lstm_model.add(Dropout(dropout_perc))
+            lstm_model.add(LSTM(layer_outp, return_sequences=True, input_shape=input_shape))
+            input_shape = (timesteps,layer_outp)
+        else: # last hidden layer
+            if apply_dropout and dropout_perc > 0: lstm_model.add(Dropout(dropout_perc))
+            lstm_model.add(LSTM(layer_outp, return_sequences=False, input_shape=input_shape))
+            input_shape = (layer_outp,)
+    lstm_model.add(Dense(output_dim))
+    lstm_model.compile(optimizer=optimizer,loss=loss,metrics=['accuracy'])
+    return lstm_model
+
+
+def lstm_base_model2(input_dim, hidden_layers=None, timesteps=1, dropout_perc=0.5, **kwargs):
+    output_dim = 1
+    # Setting up parameters
+    if hidden_layers is None:
+        layers = []
+    elif not isinstance(hidden_layers, (list, np.ndarray)):
+        layers = [hidden_layers]
+    else:
+        if isinstance(hidden_layers, np.ndarray):
+            layers = hidden_layers.tolist()
+        else:
+            layers = hidden_layers
+    if any([layer_shape < 1 or isinstance(layer_shape, float) for layer_shape in
+            layers]):  # layer shapes as percentages.
+        layers = [int(input_dim * layer_shape) for layer_shape in layers]
+    layers += [output_dim]
+    apply_dropout = dropout_perc > 0
+
+    activation = kwargs.setdefault('activation', 'relu')
+    init = kwargs.setdefault('init', 'normal')
+    optimizer = kwargs.setdefault('optimizer', 'rmsprop')
+    loss = kwargs.setdefault('loss', 'mean_squared_error')
+
+    lstm_model = Sequential()
+    input_shape = (timesteps, input_dim)
+
+    for i, layer_outp in enumerate(layers[:-1]):
+        if i == 0:
+            lstm_model.add(Dense(layer_outp, input_shape=input_shape, init=init, activation=activation))
+            input_shape = (timesteps, layer_outp)
+        elif i < len(layers) - 1:
+            if apply_dropout and dropout_perc > 0: lstm_model.add(Dropout(dropout_perc))
+            lstm_model.add(LSTM(layer_outp, return_sequences=True, input_shape=input_shape))
+            input_shape = (timesteps, layer_outp)
+        else:  # last hidden layer
+            lstm_model.add(LSTM(layer_outp, return_sequences=False, input_shape=input_shape))
+            input_shape = (layer_outp,)
+    lstm_model.add(Dense(output_dim))
+    lstm_model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
+    return lstm_model
+
+
+def lstm_base_model_old(input_dim,hidden_layers=None,timesteps=3,dropout_perc=0.5):
+    output_dim = 1
+    if hidden_layers is None: hidden_layers = []
     num_layers = len(hidden_layers)+2
     dropout_list = [dropout_perc for i in range(num_layers - 1)]
     if any([layer_shape < 1 or isinstance(layer_shape,float) for layer_shape in hidden_layers]): # layer shapes as percentages.
         hidden_layers = [int(input_dim*layer_shape) for layer_shape in hidden_layers]
     apply_dropout = True
+
     lstm_model = Sequential()
-    lstm_model.add(LSTM(hidden_layers[0], return_sequences=True, input_shape=(timesteps,input_dim)))
-    # lstm_model.add(Dense(hidden_layers[0], input_shape=(timesteps,input_dim)))
+    lstm_model.add(LSTM(hidden_layers[0], return_sequences=True, input_shape=(timesteps,input_dim),init='normal', activation='relu'))
     if apply_dropout and dropout_perc > 0: lstm_model.add(Dropout(dropout_list[0]))
+
     for i,hidden_layer_inp in enumerate(hidden_layers[:-1]):
         lstm_model.add(LSTM(hidden_layers[i+1], return_sequences=True, input_shape=(timesteps, hidden_layer_inp)))
         if apply_dropout and dropout_perc > 0: lstm_model.add(Dropout(dropout_list[i+1]))
+
     lstm_model.add(LSTM(hidden_layers[-1], return_sequences=False,
                   input_shape=(timesteps, hidden_layers[-1])))
+
     if apply_dropout: lstm_model.add(Dropout(dropout_list[-1]))
+
     lstm_model.add(Dense(output_dim))
+
     lstm_model.compile(optimizer='rmsprop',loss='mean_squared_error',metrics=['accuracy'])
+
     return lstm_model
+
+
+def baseline_model(input_dim,hidden_layers=None,dropout_perc=0.5):
+    output_dim = 1
+    # Setting up parameters
+    if hidden_layers is None:
+        layers = []
+    elif not isinstance(hidden_layers,(list,np.ndarray)):
+        layers = [hidden_layers]
+    else:
+        if isinstance(hidden_layers,np.ndarray):
+            layers = hidden_layers.tolist()
+        else:
+            layers = hidden_layers
+    if any([layer_shape < 1 or isinstance(layer_shape, float) for layer_shape in layers]):  # layer shapes as percentages.
+        layers = [int(input_dim * layer_shape) for layer_shape in layers]
+    layers+=[output_dim]
+
+    apply_dropout = dropout_perc > 0
+    input_shape = (input_dim,)
+    # create model
+    model = Sequential()
+    for i, layer_outp in enumerate(layers):
+        if i == 0:
+            model.add(Dense(layer_outp, input_shape=input_shape, init='normal', activation='relu'))
+            input_shape = (layer_outp,)
+            continue
+        if apply_dropout and dropout_perc > 0: model.add(Dropout(dropout_perc))
+        model.add(Dense(layer_outp,init='normal',input_shape=input_shape))
+        input_shape = (layer_outp,)
+
+    # Compile model
+    model.compile(loss='mean_squared_error', optimizer='adam')
+    return model
+
+
+def simple_model(input_dim,dropout_perc=0.5):
+    model = Sequential()
+    model.add(Dense(1, input_shape=(input_dim,), init='normal', activation='relu'))
+
+
+def single_layer_model(input_dim,hidden_layer=0.5,dropout_perc=0.5,**kwargs):
+    activation = kwargs.setdefault('activation','relu')
+    model = Sequential()
+    if isinstance(hidden_layer,float): hidden_layer = input_dim*hidden_layer
+    model.add(Dense(hidden_layer, input_shape=(input_dim,), init='normal', activation=activation))
+    if dropout_perc > 0: model.add(Dropout(dropout_perc))
+    model.add(Dense(1))
+    model.compile(loss='mean_squared_error', optimizer='adam')
+    return model
 
 
 '''
