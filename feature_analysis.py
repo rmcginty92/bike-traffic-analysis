@@ -3,7 +3,7 @@ from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.linear_model import BayesianRidge,Ridge,Lasso, ElasticNet
 
 from utils.data import load_bike_data
-from utils.features import expand_features,clean_features,display_coefs,full_results,display_results
+from utils.features import highlight_peaks,clean_features
 
 # Evaluation Tools
 
@@ -27,7 +27,7 @@ regressors = {
               }
 
 bike_data = load_bike_data()
-expand_features(bike_data)
+highlight_peaks(bike_data)
 y_nb = bike_data['fremont_bridge_nb']
 y_sb = bike_data['fremont_bridge_sb']
 y = bike_data['y']
@@ -58,25 +58,25 @@ weekend_feature_cols = [col for col in feature_cols if 'weekday' not in col]
 
 # Weekday Results ---------------
 print "Weekday data"
-currX = X1[weekday_feature_cols].values
-curry = y1.values
-results,best_weekday_regressors = full_results(currX,curry,weekday_regressors,n_folds=3,verbose=True)
-print results
-f,ax1 = plt.subplots()
-display_results(best_weekday_regressors, currX, curry,ax=ax1, linestyle='--')
-f,ax2 = plt.subplots()
-display_coefs(best_weekday_regressors,weekday_feature_cols,marker='o',linestyle='--',ax=ax2)
-plt.show()
+# currX = X1[weekday_feature_cols].values
+# curry = y1.values
+# results,best_weekday_regressors = full_results(currX,curry,weekday_regressors,n_folds=3,verbose=True)
+# print results
+# f,ax1 = plt.subplots()
+# display_results(best_weekday_regressors, currX, curry,ax=ax1, linestyle='--')
+# f,ax2 = plt.subplots()
+# display_coefs(best_weekday_regressors,weekday_feature_cols,marker='o',linestyle='--',ax=ax2)
+# plt.show()
 
 # Weekend Results ---------------
 print "\n\n\nWeekend data"
 
-currX = X2[weekend_feature_cols].values
-curry = y2.values
-results,best_weekend_regressors = full_results(currX,curry,weekend_regressors,n_folds=3,verbose=True)
-print results
-f,ax1 = plt.subplots()
-display_results(best_weekend_regressors, currX, curry, ax=ax1, linestyle='--')
-f,ax2 = plt.subplots()
-display_coefs(best_weekend_regressors,weekend_feature_cols,marker='o', ax=ax2,linestyle='--')
-plt.show()
+# currX = X2[weekend_feature_cols].values
+# curry = y2.values
+# results,best_weekend_regressors = full_results(currX,curry,weekend_regressors,n_folds=3,verbose=True)
+# print results
+# f,ax1 = plt.subplots()
+# display_results(best_weekend_regressors, currX, curry, ax=ax1, linestyle='--')
+# f,ax2 = plt.subplots()
+# display_coefs(best_weekend_regressors,weekend_feature_cols,marker='o', ax=ax2,linestyle='--')
+# plt.show()
