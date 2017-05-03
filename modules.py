@@ -13,7 +13,7 @@ pwd = os.getcwd()
 cfg = io.load_config_file()
 date_format, socrata_date_format = io.get_params('date_format','database_date_format',cfg=cfg)
 
-plt.style.use('ggplot')
+plt.style.use('fivethirtyeight')
 # Utility Functions
 desired_width = 320
 pd.set_option('display.width', desired_width)
