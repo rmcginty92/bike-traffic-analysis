@@ -9,6 +9,33 @@ import utils.auth as auth
 from features import expand_datetime_features
 
 
+def load_features():
+    res = io.load_file('feature_file')
+    y_nb = res['fremont_bridge_nb']
+    y_sb = res['fremont_bridge_sb']
+    y = res['y']
+
+    # Remove, date, y_nb and y_sb because they are answers. Remove precipType,precipAccumulation, and cloudCover for lack of data
+    y_cols = [
+        'fremont_bridge_nb',
+        'fremont_bridge_sb',
+        'y',
+        'date'
+              ]
+    feature_cols = res.columns.drop(y_cols)
+    return res[feature_cols],y
+
+
+def add_timesteps(X,y=None,timesteps=1):
+    #TODO: utilize strided methods in numpy
+    # X = (Num samples x num features) --> (Num samples x timesteps x num features)
+    X3d = np.column_stack([np.expand_dims(X[timesteps:,:],axis=1)]+[np.expand_dims(X[(timesteps-i):-i,:],axis=1) for i in range(1,timesteps)])
+    if y is not None:
+        y = y[timesteps:]
+        return X3d,y
+    return X3d
+
+
 # ------------------------ #
 # Data Retrieval Functions #
 # ------------------------ #
@@ -124,5 +151,6 @@ def pull_weather_data(bike_data,filename=None,save_data=True, verbose=True):
 
 
 if __name__=="__main__":
-    d = load_bike_data(update=False,save_data=False)
-    print d
+    # d = load_bike_data(update=False,save_data=False)
+    # print d
+    pass

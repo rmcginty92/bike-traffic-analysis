@@ -80,32 +80,35 @@ def normalize_features(xdf, norm_mask=None, norm_type='max', norm_perc=None, sav
 
 def expand_datetime_features(df, date):
     if isinstance(date,str):
-        date = pd.to_datetime(df[date])
-        df['date'] = date.date()
-    df['year'] = date.apply(lambda x: x.year)
-    df['month'] = date.apply(lambda x: x.month)
-    df['day'] = date.apply(lambda x: x.day)
-    df['hour'] = date.apply(lambda x: x.hour)
-    df['day_of_week'] = date.apply(lambda x: x.weekday())
+        df['date'] = pd.to_datetime(df[date])
+    df['year'] = df['date'].apply(lambda x: x.year)
+    df['month'] = df['date'].apply(lambda x: x.month)
+    df['day'] = df['date'].apply(lambda x: x.day)
+    df['hour'] = df['date'].apply(lambda x: x.hour)
+    df['day_of_week'] = df['date'].apply(lambda x: x.weekday())
     df['is_weekend'] = df['day_of_week'] >= 5
-    df['day_of_year'] = date.apply(lambda x: x.timetuple().tm_yday)
+    df['day_of_year'] = df['date'].apply(lambda x: x.timetuple().tm_yday)
 
 
-def expand_features(bike_data):
-    # First add hour peaks based on day of week
+def highlight_peaks(bike_data):
     bike_data_week = ~bike_data.is_weekend
     # try with np.sqrt and np.log1p
-    add_peak_kernels(bike_data,groupby_feature='hour',filtered_bd=bike_data[bike_data_week],colname='weekdayhour'+'_euclid_dist_from',
-                     kernel_func=[np.sqrt,np.square],kernel_kwargs=[{},{}])
+    # First add hour peaks based on day of week
+    add_peak_kernels(bike_data,groupby_feature='hour',
+                     filtered_bd=bike_data[bike_data_week],
+                     colname='weekdayhour'+'_euclid_dist_from',
+                     pk_kernel_func=np.sqrt,trgh_kernel_func=np.square)
     bike_data_weekend = bike_data.is_weekend
-    add_peak_kernels(bike_data,groupby_feature='hour',filtered_bd=bike_data[bike_data_weekend],colname='weekendhour'+'_euclid_dist_from',
-                     peak_lim=1,kernel_func=np.square)
-    cols = ['hour','day_of_year','day_of_week','y']
+    add_peak_kernels(bike_data,groupby_feature='hour',
+                     filtered_bd=bike_data[bike_data_weekend],
+                     colname='weekendhour'+'_euclid_dist_from',
+                     peak_lim=1,
+                     kernel_func=np.square)
+    # Yearly peaks / troughs
     yr_dist = bike_data.copy()
-    yr_dist['y'] = bike_data['y'].rolling(7).mean()
+    yr_dist['y'] = bike_data['y'].rolling(min_periods=1,window=30*24).mean()
     add_peak_kernels(bike_data,groupby_feature='day_of_year',agg_func=np.max,filtered_bd=yr_dist,
                      colname='day_of_year'+'_euclid_dist_from',kernel_func=np.square,peak_lim=1)
-    convert_weather_summary(bike_data)
 
 
 def convert_weather_summary(bike_data):
@@ -182,23 +185,31 @@ def find_peaks_of_data(signal,peak_lim=2,trough_lim=2):
 
 
 def add_peak_kernels(bike_data, groupby_feature, y_feature='y',filtered_bd=None, peaks=None, peak_lim=2,trough_lim=2,
-                     colname=None, agg_func=np.sum,kernel_scale=1, kernel_func=np.square,kernel_kwargs={}):
-    if filtered_bd is None: filtered_bd = bike_data
+                     colname=None, agg_func=np.sum,kernel_scale=1, kernel_func=np.square,kernel_kwargs={},
+                     pk_kernel_func=None,pk_kernel_kwargs={},trgh_kernel_func=None,trgh_kernel_kwargs={}):
+    if filtered_bd is None:
+        filtered_bd = bike_data
+    if kernel_kwargs is None: kernel_kwargs = {}
+    if pk_kernel_func is None:
+        pk_kernel_func = kernel_func
+        pk_kernel_kwargs = kernel_kwargs
+    if trgh_kernel_func is None:
+        trgh_kernel_func = kernel_func
+        trgh_kernel_kwargs = kernel_kwargs
+
     if peaks is None:
-        peaks,troughs = find_peaks_of_data(filtered_bd.groupby(groupby_feature).agg(agg_func)[y_feature], peak_lim=peak_lim,trough_lim=trough_lim)
-    if colname is None: colname = groupby_feature+'_euclid_dist_from'
+        peaks,troughs = find_peaks_of_data(filtered_bd.groupby(groupby_feature).agg(agg_func)[y_feature],
+                                           peak_lim=peak_lim,trough_lim=trough_lim)
+    if colname is None:
+        colname = groupby_feature+'_euclid_dist_from'
     nunique = len(bike_data[groupby_feature].unique())
-    if isinstance(kernel_func,list):
-        pk_kernel_func,trgh_kernel_func = kernel_func[0],kernel_func[1]
-        pk_kernel_kwargs,trgh_kernel_kwargs = kernel_kwargs[0],kernel_kwargs[1]
-    else:
-        pk_kernel_func,trgh_kernel_func = kernel_func,kernel_func
-        pk_kernel_kwargs,trgh_kernel_kwargs = kernel_kwargs,kernel_kwargs
     for peakval in peaks:
-        euclid_dist = np.min(np.abs(peakval-[bike_data[groupby_feature]+shift for shift in [-nunique,0,nunique]]),0)
+        feature_extended = np.abs(peakval - [bike_data[groupby_feature] + shift for shift in [-nunique, 0, nunique]])
+        euclid_dist = np.min(feature_extended,0)
         bike_data[colname+"_pk_"+str(int(peakval))] = pk_kernel_func(kernel_scale*euclid_dist,**pk_kernel_kwargs)
     for trough in troughs:
-        euclid_dist = np.min(np.abs(trough-[bike_data[groupby_feature]+shift for shift in [-nunique,0,nunique]]),0)
+        feature_extended = np.abs(trough-[bike_data[groupby_feature]+shift for shift in [-nunique,0,nunique]])
+        euclid_dist = np.min(feature_extended,0)
         bike_data[colname+"_trgh_"+str(int(trough))] = trgh_kernel_func(kernel_scale*euclid_dist,**trgh_kernel_kwargs)
 
 
