@@ -44,18 +44,19 @@ def add_timesteps(X,y=None,timesteps=1):
 def load_bike_data(filename=None,update=False,save_data=True, verbose=True):
     if isinstance(filename,str) and os.path.exists(filename):
         if verbose: print "Loading File: "+filename
-        bike_data = pd.read_csv(filename,index_col=False)
+        bike_data = pd.read_csv(filename)
         if verbose: print "File Loaded."
     else:
         try:
-            if verbose: print "Loading file specified in cfg.json..."
-            bike_data = io.load_file("data_file",index_col=False)
+            if verbose: print "Loading file specified in configuration files..."
+            bike_data = io.load_file("data_file")
             if verbose: print "File Loaded."
         except:
             if verbose: print "ERROR: config file missing"
             bike_data = None
             update = True
             if verbose: print "Pulling data from online database..."
+
     if update:
         if verbose: print "Updating..."
         bike_data = pull_bike_data(bike_data=bike_data,save_data=save_data,verbose=verbose)
@@ -97,7 +98,7 @@ def pull_bike_data(bike_data=None,save_data=True, verbose=True):
     bike_data['y'] = bike_data['fremont_bridge_nb']+bike_data['fremont_bridge_sb']
     expand_datetime_features(bike_data,'date')
     if save_data:
-        io.save_file("data_file",bike_data,index=False)
+        io.save_file("data_file",bike_data)
         io.save_file("info_file",info)
     if verbose: print "Bike data is up-to-date."
     return bike_data

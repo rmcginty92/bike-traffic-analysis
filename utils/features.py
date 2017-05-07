@@ -78,16 +78,21 @@ def normalize_features(xdf, norm_mask=None, norm_type='max', norm_perc=None, sav
 # ------------------ #
 
 
-def expand_datetime_features(df, date):
-    if isinstance(date,str):
-        df['date'] = pd.to_datetime(df[date])
-    df['year'] = df['date'].apply(lambda x: x.year)
-    df['month'] = df['date'].apply(lambda x: x.month)
-    df['day'] = df['date'].apply(lambda x: x.day)
-    df['hour'] = df['date'].apply(lambda x: x.hour)
-    df['day_of_week'] = df['date'].apply(lambda x: x.weekday())
+def expand_datetime_features(df, date=None):
+    if 'date' in df.columns and date is None:
+        date = pd.to_datetime(df['date'])
+    elif isinstance(date,(str,unicode)):
+        date = pd.to_datetime(df[date])
+    else: # assumed that date is Series or DataFrame
+        date = pd.to_datetime(date)
+    df['date'] = date
+    df['year'] = date.apply(lambda x: x.year)
+    df['month'] = date.apply(lambda x: x.month)
+    df['day'] = date.apply(lambda x: x.day)
+    df['hour'] = date.apply(lambda x: x.hour)
+    df['day_of_week'] = date.apply(lambda x: x.weekday())
     df['is_weekend'] = df['day_of_week'] >= 5
-    df['day_of_year'] = df['date'].apply(lambda x: x.timetuple().tm_yday)
+    df['day_of_year'] = date.apply(lambda x: x.timetuple().tm_yday)
 
 
 def highlight_peaks(bike_data):

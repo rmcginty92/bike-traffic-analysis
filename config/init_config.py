@@ -4,7 +4,7 @@ import json
 
 def main():
     config_path = os.getcwd()
-    cfg_file = os.path.join(config_path,'cfg.json')
+    cfg_file = os.path.join(config_path,'default.cfg')
     if not os.path.isfile(cfg_file):
         raise IOError('Could not find configuration file: {filename}'.format(filename=cfg_file))
     with open(cfg_file,'r') as f:

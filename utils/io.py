@@ -21,7 +21,7 @@ def load_config_path(path='config', project_name=''):
     return os.path.join(pwd, path)
 
 
-def load_config_file(path='config', default_filename='default.cfg', project_name='VPAudio'):
+def load_config_file(path='config', default_filename='default.cfg', project_name=''):
     # Traverse upwards to find config path
     default_filename = 'default.cfg'
     custom_filename = 'custom.cfg'
@@ -115,7 +115,7 @@ def load_file(name, asSeries=True, aslist=False, load_param_name=None, cfg=None,
     ext = os.path.splitext(full_filename)[-1]
     if ext in cfg['extension_mappings']['.csv']:
         if load_param_name is None: load_param_name = name
-        csv2df_kwargs = cfg['load_kwargs'].get(load_param_name, {})
+        csv2df_kwargs = cfg.get('load_kwargs',{}).get(load_param_name, {})
         csv2df_kwargs.update(kwargs)
         res = pd.read_csv(full_filename, **csv2df_kwargs)
         if asSeries and res.ndim > 1 and len(res.columns) == 1: res = res[res.columns[0]]
