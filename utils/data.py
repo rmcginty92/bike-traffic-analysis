@@ -24,7 +24,7 @@ def load_features():
               ]
     feature_cols = res.columns.drop(y_cols)
     return res[feature_cols],y
-
+ 
 
 def add_timesteps(X,y=None,timesteps=1):
     #TODO: utilize strided methods in numpy
@@ -48,14 +48,19 @@ def load_bike_data(filename=None,update=False,save_data=True, verbose=True):
         if verbose: print "File Loaded."
     else:
         try:
-            if verbose: print "Loading file specified in configuration files..."
-            bike_data = io.load_file("data_file")
-            if verbose: print "File Loaded."
+            if os.path.exists(os.path.join(io.get_path("data_path"),filename)):
+                if verbose: print "Loading file from data path specified in configuration files..."
+                bike_data = io.load_file(io.get_path(["data_path",filename]))
         except:
-            if verbose: print "ERROR: config file missing"
-            bike_data = None
-            update = True
-            if verbose: print "Pulling data from online database..."
+            try:
+                if verbose: print "Loading file specified in configuration files..."
+                bike_data = io.load_file("data_file")
+                if verbose: print "File Loaded."
+            except:
+                if verbose: print "ERROR: config file missing"
+                bike_data = None
+                update = True
+                if verbose: print "Pulling data from online database..."
 
     if update:
         if verbose: print "Updating..."
@@ -95,7 +100,11 @@ def pull_bike_data(bike_data=None,save_data=True, verbose=True):
             if verbose: print "New data pulled:\n{0} new rows of data\nTotal = {1}".format(str(new_bike_data.shape[0]),str(bike_data.shape[0]))
     else:
         if verbose: print "No new data"
-    bike_data['y'] = bike_data['fremont_bridge_nb']+bike_data['fremont_bridge_sb']
+
+    # TODO: convert numeric columns into numeric types from object types
+    bike_data.loc[:, ['fremont_bridge_sb', 'fremont_bridge_nb']] = bike_data.loc[:,['fremont_bridge_sb','fremont_bridge_nb']].convert_objects(convert_dates=False,convert_numeric=True)
+    bike_data['y'] = bike_data['fremont_bridge_nb'].astype(float)+bike_data['fremont_bridge_sb'].astype(float)
+
     expand_datetime_features(bike_data,'date')
     if save_data:
         io.save_file("data_file",bike_data)
@@ -142,9 +151,9 @@ def pull_weather_data(bike_data,filename=None,save_data=True, verbose=True):
         if verbose: print "Finished..."
 
     if save_data:
-        if isinstance(filename,str):
+        if filename is not None:
             if verbose: print "Saving to {0} file".format(filename)
-            bike_data.to_csv(filename,index=False)
+            io.save_file(io.get_path(['data_path',filename]),bike_data,index=False)
         else:
             if verbose: print "Saving to file specified in cfg.json"
             io.save_file('data_file',bike_data,index=False)
