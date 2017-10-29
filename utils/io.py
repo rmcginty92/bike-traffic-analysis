@@ -36,6 +36,11 @@ def load_config_file(path='config', default_filename='default.cfg', project_name
         default = update_parameters(default, custom, add_new=True)
     return default
 
+def get_filepath(name, cfg=None):
+    if cfg is None: cfg = load_config_file()
+    name = cfg["files"].get(name,name)
+    return get_path(name)
+
 
 def get_path(name, forcepath=True, cfg=None):
     if cfg is None: cfg = load_config_file()
@@ -88,14 +93,15 @@ def get_params(*args, **kwargs):
 
 def load_key(key_name,cfg=None):
     if cfg is None: cfg = load_config_file()
-    res = cfg['keys'].get(key_name, None)
-    if res is None:
-        raise KeyError("{0} not contained in config.json \"keys\".".format(key_name))
+    res = cfg['keys'].get(key_name, key_name)
     if isinstance(res,list):
         dir_name,filename = res[:-1],res[-1]
         full_filename = os.path.join(get_path(name=dir_name,cfg=cfg),filename)
     else:
         full_filename = os.path.join(get_path(name=get_path('key_path'), cfg=cfg), res)
+    if not os.path.isfile(full_filename):
+        raise KeyError("{0} not contained in config.json \"keys\".".format(key_name))
+
     ext = os.path.splitext(full_filename)[-1]
     if ext == '.json':
         with open(full_filename,'r') as f:

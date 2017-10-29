@@ -1,4 +1,6 @@
 import os
+import boto3
+import botocore
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -6,7 +8,7 @@ import forecastio
 import utils.io as io
 import utils.auth as auth
 
-from features import expand_datetime_features
+from utils.features import expand_datetime_features
 
 
 def load_features():
@@ -14,14 +16,8 @@ def load_features():
     y_nb = res['fremont_bridge_nb']
     y_sb = res['fremont_bridge_sb']
     y = res['y']
-
-    # Remove, date, y_nb and y_sb because they are answers. Remove precipType,precipAccumulation, and cloudCover for lack of data
-    y_cols = [
-        'fremont_bridge_nb',
-        'fremont_bridge_sb',
-        'y',
-        'date'
-              ]
+    # Remove, date, y_nb and y_sb because they are answers.
+    y_cols = ['fremont_bridge_nb', 'fremont_bridge_sb','y']
     feature_cols = res.columns.drop(y_cols)
     return res[feature_cols],y
  
@@ -40,29 +36,60 @@ def add_timesteps(X,y=None,timesteps=1):
 # Data Retrieval Functions #
 # ------------------------ #
 
+def load_data_from_s3(filename=None, s3_resource=None, s3_key=None):
+    if s3_resource is None: s3_resource = _create_s3_resource()
+    if s3_key is None:
+        if isinstance(filename,(str,unicode)):
+            s3_key = filename
+        else:
+            s3_key = io.get_params("s3_key")
+    full_filename = resolve_filepath(filename)
+    s3_bucket, region = io.get_params("s3_bucket","s3_region")
+    try:
+        s3_resource.Bucket(s3_bucket).download_file(s3_key, full_filename)
+    except botocore.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == "404":
+            print("The object does not exist.")
+        else:
+            raise
+
+
+def put_data_in_s3(filename=None, s3_resource=None, s3_key=None):
+    if s3_resource is None: s3_resource = _create_s3_resource()
+    if s3_key is None:
+        if isinstance(filename,(str,unicode)):
+            s3_key = filename
+        else:
+            s3_key = io.get_params("s3_key")
+    s3_bucket, region = io.get_params("s3_bucket", "s3_region")
+    full_filename = resolve_filepath(filename)
+    s3_resource.upload_file(full_filename, s3_bucket, s3_key)
+
+
+
+def resolve_filepath(filename):
+    # Check if absolute path, then if filename in datapath, finally use default
+    if filename is not None and isinstance(filename,str) and os.path.exists(filename):
+        return filename
+    elif filename is not None and os.path.exists(os.path.join(io.get_path("data_path"),filename)):
+        return os.path.join(io.get_path("data_path"), filename)
+    else:
+        return io.get_filepath("data_file")
+
+
+def load_data_from_local(filename=None, verbose=True):
+    bike_data = None
+    full_filename = resolve_filepath(filename)
+    try:
+        bike_data = io.load_file(full_filename)
+    except:
+        if verbose: print "ERROR: Bike data not loaded."
+    return bike_data
+
 
 def load_bike_data(filename=None,update=False,save_data=True, verbose=True):
-    if isinstance(filename,str) and os.path.exists(filename):
-        if verbose: print "Loading File: "+filename
-        bike_data = pd.read_csv(filename)
-        if verbose: print "File Loaded."
-    else:
-        try:
-            if os.path.exists(os.path.join(io.get_path("data_path"),filename)):
-                if verbose: print "Loading file from data path specified in configuration files..."
-                bike_data = io.load_file(io.get_path(["data_path",filename]))
-        except:
-            try:
-                if verbose: print "Loading file specified in configuration files..."
-                bike_data = io.load_file("data_file")
-                if verbose: print "File Loaded."
-            except:
-                if verbose: print "ERROR: config file missing"
-                bike_data = None
-                update = True
-                if verbose: print "Pulling data from online database..."
-
-    if update:
+    bike_data = load_data_from_local()
+    if update or bike_data is None:
         if verbose: print "Updating..."
         bike_data = pull_bike_data(bike_data=bike_data,save_data=save_data,verbose=verbose)
         bike_data = pull_weather_data(bike_data,filename=filename,save_data=save_data,verbose=verbose)
@@ -73,7 +100,9 @@ def load_bike_data(filename=None,update=False,save_data=True, verbose=True):
 
 
 def pull_bike_data(bike_data=None,save_data=True, verbose=True):
-    database_date_format, date_format, url, dataset_identifier = io.get_params('database_date_format','date_format','url','dataset_identifier')
+    database_date_format, date_format, url, dataset_identifier = io.get_params('database_date_format',
+                                                                               'date_format','url',
+                                                                               'dataset_identifier')
     info = io.load_file("info_file")
     last_pulled = info.get('last_updated',None)
     last_pulled_dt = datetime.strptime(last_pulled, date_format) if last_pulled is not None else datetime(1970,1,1)
@@ -102,7 +131,8 @@ def pull_bike_data(bike_data=None,save_data=True, verbose=True):
         if verbose: print "No new data"
 
     # TODO: convert numeric columns into numeric types from object types
-    bike_data.loc[:, ['fremont_bridge_sb', 'fremont_bridge_nb']] = bike_data.loc[:,['fremont_bridge_sb','fremont_bridge_nb']].convert_objects(convert_dates=False,convert_numeric=True)
+    bridge_count_numeric = pd.to_numeric(bike_data.loc[:,['fremont_bridge_sb','fremont_bridge_nb']])
+    bike_data.loc[:, ['fremont_bridge_sb', 'fremont_bridge_nb']] = bridge_count_numeric
     bike_data['y'] = bike_data['fremont_bridge_nb'].astype(float)+bike_data['fremont_bridge_sb'].astype(float)
 
     expand_datetime_features(bike_data,'date')
@@ -130,7 +160,10 @@ def pull_weather_data(bike_data,filename=None,save_data=True, verbose=True):
             continue
         forecast = forecastio.load_forecast(api_key,lat,lng,time=currtime)
         # ensure no more calculations completed if no data returned; number of calls have been reached
-        if forecast is None or (isinstance(forecast,forecastio.models.Forecast) and len(forecast.hourly().data)==0): continue
+        if forecast is None \
+                or (isinstance(forecast,forecastio.models.Forecast)
+                    and len(forecast.hourly().data)==0):
+            continue
         hourly_data = forecast.hourly().data
         hourly_data_df = pd.concat([pd.DataFrame(hd.d,index=[1]) for hd in hourly_data],ignore_index=True)
         if hourly_data_df.isnull().sum().sum() > 5*hourly_data_df.shape[0]: # Assuming that if 5 cols null, data not good.
@@ -159,6 +192,20 @@ def pull_weather_data(bike_data,filename=None,save_data=True, verbose=True):
             io.save_file('data_file',bike_data,index=False)
     return bike_data
 
+
+def _create_s3_resource():
+    try:
+        ACCESS_KEY = io.load_key("aws.access.key")
+        SECRET_KEY = io.load_key("aws.secret.key")
+    except:
+        raise IOError()
+    s3 = boto3.resource(
+        's3',
+        aws_access_key_id=ACCESS_KEY,
+        aws_secret_access_key=SECRET_KEY
+    )
+
+    return s3
 
 if __name__=="__main__":
     # d = load_bike_data(update=False,save_data=False)
